@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'supabase/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
@@ -19,7 +20,15 @@ jobs:
         with:
           version: latest
 
+      - name: Verify CLI and auth
+        run: supabase --version
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Deploy Edge Function
-        run: supabase functions deploy analyze-job --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase functions deploy analyze-job \
+            --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} \
+            --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
