@@ -1,0 +1,13 @@
+# Secrets — NEVER push these
+.env
+.env.local
+
+# Dependencies (not needed — we use CDN)
+node_modules/
+
+# Supabase local data
+.supabase/
+
+# OS files
+.DS_Store
+Thumbs.db

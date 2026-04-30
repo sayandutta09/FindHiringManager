@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FindHiringManager — Find Contacts from Job Descriptions</title>
+    <meta name="description" content="Paste a job description and instantly find hiring managers, stakeholders, and recruiters to network with.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="bg-orbs" aria-hidden="true">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                    </svg>
+                </div>
+                <h1>FindHiringManager</h1>
+            </div>
+            <p class="tagline">Paste a job description → Get 6 contacts to network with</p>
+        </header>
+
+        <main class="main-content">
+            <section class="input-section" id="input-section">
+                <div class="card glass-card">
+                    <h2 class="section-title"><span class="step-badge">1</span> Paste Your Job Description</h2>
+                    <textarea id="job-description" class="job-input" placeholder="Paste the full job description here..." rows="8"></textarea>
+                    <div class="input-footer">
+                        <span class="char-count" id="char-count">0 characters</span>
+                        <button id="analyze-btn" class="btn-primary">
+                            <span class="btn-text">🔍 Find Contacts</span>
+                            <span class="btn-loading" style="display:none;"><div class="spinner"></div>Searching...</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="error-section" id="error-section" style="display:none;">
+                <div class="card glass-card error-card">
+                    <div class="error-icon">⚠️</div>
+                    <p id="error-message">Something went wrong.</p>
+                    <button class="btn-secondary" id="dismiss-error-btn">Dismiss</button>
+                </div>
+            </section>
+
+            <section class="results-section" id="results-section" style="display:none;">
+                <div class="results-header">
+                    <h2 class="section-title"><span class="step-badge">2</span> Your Contacts</h2>
+                    <div class="job-summary" id="job-summary"></div>
+                </div>
+                <div class="results-disclaimer">
+                    ℹ️ Results are based on publicly available data. Verify on LinkedIn before reaching out.
+                </div>
+                <div class="category-group" id="hiring-managers-group">
+                    <h3 class="category-title"><span class="category-badge badge-hiring-manager">HM</span> Probable Hiring Managers</h3>
+                    <div class="contacts-grid" id="hiring-managers-grid"></div>
+                </div>
+                <div class="category-group" id="stakeholders-group">
+                    <h3 class="category-title"><span class="category-badge badge-stakeholder">SH</span> Stakeholders to Reach Out To</h3>
+                    <div class="contacts-grid" id="stakeholders-grid"></div>
+                </div>
+                <div class="category-group" id="recruiters-group">
+                    <h3 class="category-title"><span class="category-badge badge-recruiter">RC</span> Probable Recruiters</h3>
+                    <div class="contacts-grid" id="recruiters-grid"></div>
+                </div>
+            </section>
+
+            <section class="history-section" id="history-section">
+                <h2 class="section-title history-title">🕐 Recent Searches</h2>
+                <div id="history-list" class="history-list">
+                    <p class="history-empty">No searches yet. Paste a job description above to get started!</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Built with <span class="footer-heart">♥</span> using Supabase + Gemini AI</p>
+            <p class="footer-disclaimer">Only uses publicly available data. Not affiliated with LinkedIn.</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+</body>
+</html>
