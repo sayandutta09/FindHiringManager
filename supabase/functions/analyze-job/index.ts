@@ -1,6 +1,7 @@
 // FindHiringManager — Edge Function: analyze-job
 // This function receives a job description, calls Gemini API with Google Search
 // grounding, and returns structured contact suggestions.
+// Deployment trigger: config fix
 
 import { GoogleGenAI } from "https://esm.sh/@google/genai@1.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
