@@ -104,20 +104,22 @@ document.addEventListener("DOMContentLoaded", function () {
         var contacts = data.contacts || [];
         contacts.forEach(function (contact) {
             var grid = grids[contact.category];
-            if (grid) grid.innerHTML += createContactCard(contact);
+            if (grid) grid.innerHTML += createContactCard(contact, data.company);
         });
 
         resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     // ----- CONTACT CARD -----
-    function createContactCard(contact) {
+    function createContactCard(contact, companyName) {
         var confidenceClass = "confidence-" + (contact.confidence || "medium");
         var confidenceLabel = contact.confidence || "medium";
 
-        var linkedinHtml = contact.linkedinUrl
-            ? '<a href="' + escapeHtml(contact.linkedinUrl) + '" target="_blank" rel="noopener noreferrer" class="contact-linkedin">🔗 View LinkedIn Profile</a>'
-            : '<span class="contact-linkedin" style="opacity:0.4;cursor:default;">LinkedIn not found</span>';
+        // Generate a robust LinkedIn Search link instead of a direct URL to avoid 404s
+        var searchQuery = encodeURIComponent(contact.name + " " + (companyName || ""));
+        var searchUrl = "https://www.linkedin.com/search/results/people/?keywords=" + searchQuery;
+
+        var linkedinHtml = '<a href="' + searchUrl + '" target="_blank" rel="noopener noreferrer" class="contact-linkedin">🔍 Find on LinkedIn</a>';
 
         return '<div class="contact-card">'
             + '<div class="contact-name">' + escapeHtml(contact.name)
