@@ -28,7 +28,7 @@ jobs:
       - name: Deploy Edge Function
         run: |
           supabase functions deploy analyze-job \
-            --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} \
+            --project-ref orgskwzpfjyuhiadrxhl \
             --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
