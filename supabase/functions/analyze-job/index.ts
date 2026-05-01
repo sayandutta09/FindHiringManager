@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const prompt = `You are a networking research assistant. Given this job description, find relevant contacts.
+    const prompt = `You are an expert networking research assistant. Your task is to find SPECIFIC, REAL PEOPLE currently working at the company mentioned in the job description. Do NOT return generic job titles (like "Head of Customer Success"). You MUST use Google Search to find actual, named individuals (e.g., "Megan Yen", "Rodney Hu") who hold these or similar roles at the company.
 
 Return ONLY raw JSON (no markdown, no code fences) with this EXACT structure:
 {
@@ -45,20 +45,22 @@ Return ONLY raw JSON (no markdown, no code fences) with this EXACT structure:
   "location": "string or null",
   "contacts": [
     {
-      "name": "string",
-      "title": "string",
+      "name": "string (MUST be a real person's name, e.g., 'Jane Doe')",
+      "title": "string (Their actual current job title)",
       "category": "hiring_manager",
       "linkedinUrl": "string or null",
-      "reason": "string",
+      "reason": "string (Why this specific person is relevant to the role)",
       "confidence": "high"
     }
   ]
 }
 
-Find exactly:
-- 2 hiring managers (category: "hiring_manager")
-- 2 stakeholders (category: "stakeholder")
-- 2 recruiters (category: "recruiter")
+Find exactly 6 REAL people:
+- 2 probable hiring managers or leadership figures (category: "hiring_manager")
+- 2 cross-functional stakeholders (category: "stakeholder")
+- 2 recruiters or talent acquisition staff (category: "recruiter")
+
+If you cannot find an exact match, find the closest real person in leadership or HR at that company. NEVER output generic placeholders for names.
 
 Job Description:
 ---
@@ -71,7 +73,8 @@ ${jobDescription.substring(0, 3000)}
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }]
       }),
     });
 
