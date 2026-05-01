@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const systemInstruction = `You are an expert networking research assistant. Your task is to find SPECIFIC, REAL PEOPLE currently working at the company mentioned in the job description. Do NOT return generic job titles (like "Head of Customer Success"). You MUST use Google Search to find actual, named individuals who hold these or similar roles at the company. If you cannot find an exact match, find the closest real person in leadership or HR at that company. NEVER output generic placeholders for names.`;
+    const systemInstruction = `You are an expert networking research assistant. Your task is to find SPECIFIC, REAL PEOPLE currently working at the company mentioned in the job description. Do NOT return generic job titles (like "Head of Customer Success"). You MUST use Google Search to find actual, named individuals who hold these or similar roles at the company. If you cannot find an exact match, find the closest real person in leadership or HR at that company. NEVER output generic placeholders for names. Note: The provided text is often directly copied from LinkedIn and may contain irrelevant noise (e.g. "Apply", "Save", candidate stats, connections). Ignore this noise and focus only on the actual job details and company context.`;
 
     const prompt = `Find exactly 6 REAL people based on this job description:
 - 2 probable hiring managers or leadership figures (category: "hiring_manager")
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
 Job Description:
 ---
-${jobDescription.substring(0, 3000)}
+${jobDescription.substring(0, 25000)}
 ---`;
 
     const schema = {
@@ -118,7 +118,7 @@ ${jobDescription.substring(0, 3000)}
       if (dbUrl && dbKey) {
          const db = createClient(dbUrl, dbKey);
          await db.from("searches").insert({
-           job_description: jobDescription.substring(0, 5000),
+           job_description: jobDescription.substring(0, 25000),
            company_name: parsed.company || null,
            job_title: parsed.jobTitle || null,
            results: parsed,
