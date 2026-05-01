@@ -7,14 +7,12 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  // 1. Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // 2. Health check endpoint (for easy debugging in browser)
   if (req.method === "GET") {
-    return new Response(JSON.stringify({ status: "Edge Function is online and reachable!" }), {
+    return new Response(JSON.stringify({ status: "Edge Function is online!" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -25,15 +23,15 @@ Deno.serve(async (req) => {
     if (!jobDescription || jobDescription.trim().length < 20) {
       return new Response(
         JSON.stringify({ error: "Please provide a longer job description." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "Gemini API key not configured in Supabase." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Gemini API key not configured in Supabase. Please add GEMINI_API_KEY to Edge Function Secrets." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -67,7 +65,6 @@ Job Description:
 ${jobDescription.substring(0, 3000)}
 ---`;
 
-    // 3. Call Gemini API directly via raw fetch (zero dependencies)
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     
     const geminiResponse = await fetch(geminiUrl, {
@@ -80,20 +77,24 @@ ${jobDescription.substring(0, 3000)}
 
     if (!geminiResponse.ok) {
       const errorText = await geminiResponse.text();
-      throw new Error(`Gemini API Error: ${geminiResponse.status} ${errorText}`);
+      return new Response(
+        JSON.stringify({ error: `Gemini API Error (${geminiResponse.status}): ${errorText.substring(0, 500)}` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const geminiData = await geminiResponse.json();
     
-    // Extract text from Gemini response structure
     let text = "";
     try {
       text = geminiData.candidates[0].content.parts[0].text;
     } catch (e) {
-      throw new Error("Unexpected response format from Gemini API");
+      return new Response(
+        JSON.stringify({ error: "Unexpected response format from Gemini API." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Clean markdown if present
     const cleanText = text.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
 
     let parsed;
@@ -101,12 +102,11 @@ ${jobDescription.substring(0, 3000)}
       parsed = JSON.parse(cleanText);
     } catch (e) {
       return new Response(
-        JSON.stringify({ error: "Could not parse AI response into valid JSON.", raw: cleanText.substring(0, 200) }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Could not parse AI response into valid JSON." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 4. Save to DB (best effort)
     try {
       const dbUrl = Deno.env.get("SUPABASE_URL");
       const dbKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -130,7 +130,7 @@ ${jobDescription.substring(0, 3000)}
   } catch (err) {
     return new Response(
       JSON.stringify({ error: "Edge Function Error: " + err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
