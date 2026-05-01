@@ -1,17 +1,13 @@
 project_id = "findhiringmanager"
 
 [api]
-enabled = true
 port = 54321
-config_dir = "./supabase"
 
 [db]
 port = 54322
 
 [studio]
-enabled = true
 port = 54323
 
 [edge_runtime]
 enabled = true
-port = 54324
