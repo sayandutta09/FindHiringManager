@@ -1,44 +1,58 @@
 // ============================================================
-// FindHiringManager — Frontend Logic
+// FindHiringManager - Frontend Logic
 // ============================================================
 
 // ----- CONFIGURATION -----
 const SUPABASE_URL = "https://orgskwzpfjyuhiadrxhl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yZ3Nrd3pwZmp5dWhpYWRyeGhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODAxMTIsImV4cCI6MjA5MzE1NjExMn0.xJc17kMFrQk5IK2l6z2i5COe1Ab_8bD3ZHRku3PAPMA";
 
-// ----- INIT -----
-// Wrap everything in DOMContentLoaded so we know the DOM + CDN scripts are ready
 document.addEventListener("DOMContentLoaded", function () {
-
-    // Safety check — make sure Supabase CDN loaded
     if (!window.supabase || typeof window.supabase.createClient !== "function") {
         console.error("Supabase CDN failed to load.");
         alert("App failed to load. Please refresh the page.");
         return;
     }
 
-    // Create Supabase client
     const { createClient } = window.supabase;
     const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ----- DOM ELEMENTS -----
     const jobInput = document.getElementById("job-description");
+    const inputSection = document.getElementById("input-section");
+    const collapsedSearch = document.getElementById("collapsed-search");
+    const editSearchBtn = document.getElementById("edit-search-btn");
     const charCount = document.getElementById("char-count");
     const analyzeBtn = document.getElementById("analyze-btn");
     const errorSection = document.getElementById("error-section");
     const errorMessage = document.getElementById("error-message");
     const resultsSection = document.getElementById("results-section");
-    const jobSummary = document.getElementById("job-summary");
-    const historyList = document.getElementById("history-list");
+    const contactsTableBody = document.getElementById("contacts-table-body");
     const dismissErrorBtn = document.getElementById("dismiss-error-btn");
+    const searchStatus = document.getElementById("search-status");
+    const searchStatusText = document.getElementById("search-status-text");
+    const statusSteps = document.getElementById("status-steps");
+    const statusProgressFill = document.getElementById("status-progress-fill");
 
-    const grids = {
-        hiring_manager: document.getElementById("hiring-managers-grid"),
-        stakeholder: document.getElementById("stakeholders-grid"),
-        recruiter: document.getElementById("recruiters-grid"),
+    const loadingMessages = [
+        "Reading job description",
+        "Identifying role",
+        "Mapping decision makers",
+        "Finding contacts",
+        "Reviewing stakeholders",
+        "Researching org chart",
+        "Preparing results"
+    ];
+
+    const categoryLabels = {
+        hiring_manager: "Hiring manager",
+        stakeholder: "Stakeholder",
+        recruiter: "Recruiter"
     };
 
-    // ----- EVENT LISTENERS -----
+    const expectedSearchMs = 24000;
+    let loadingFrame = null;
+    let loadingIndex = 0;
+    let loadingStartedAt = 0;
+
     jobInput.addEventListener("input", function () {
         charCount.textContent = jobInput.value.length + " characters";
     });
@@ -49,21 +63,23 @@ document.addEventListener("DOMContentLoaded", function () {
         errorSection.style.display = "none";
     });
 
-    // Load history on startup
-    loadHistory();
+    editSearchBtn.addEventListener("click", function () {
+        expandSearchInput();
+        jobInput.focus();
+    });
 
-    // ----- MAIN FUNCTION -----
     async function analyzeJob() {
         const description = jobInput.value.trim();
 
         if (description.length < 20) {
-            showError("Please paste a longer job description (at least 20 characters).");
+            showError("Please paste a longer job description.");
             return;
         }
 
         setLoading(true);
         hideError();
         resultsSection.style.display = "none";
+        showInProgressSearch(description);
 
         try {
             const { data, error } = await db.functions.invoke("analyze-job", {
@@ -75,127 +91,129 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!data) throw new Error("No data returned from the server.");
 
             displayResults(data);
-            await loadHistory();
-
+            collapseSearchInput(data, description);
         } catch (err) {
             console.error("Analysis error:", err);
+            expandSearchInput();
             showError(err.message || "Something went wrong. Please try again.");
         } finally {
             setLoading(false);
         }
     }
 
-    // ----- DISPLAY RESULTS -----
     function displayResults(data) {
+        const contacts = Array.isArray(data.contacts) ? data.contacts : [];
+
         resultsSection.style.display = "block";
-
-        const tags = [];
-        if (data.company) tags.push("🏢 " + data.company);
-        if (data.jobTitle) tags.push("💼 " + data.jobTitle);
-        if (data.department) tags.push("📂 " + data.department);
-        if (data.location) tags.push("📍 " + data.location);
-
-        jobSummary.innerHTML = tags.map(function (t) {
-            return '<span class="summary-tag">' + escapeHtml(t) + "</span>";
+        contactsTableBody.innerHTML = contacts.map(function (contact) {
+            return createContactRow(contact);
         }).join("");
-
-        Object.values(grids).forEach(function (g) { g.innerHTML = ""; });
-
-        var contacts = data.contacts || [];
-        contacts.forEach(function (contact) {
-            var grid = grids[contact.category];
-            if (grid) grid.innerHTML += createContactCard(contact, data.company);
-        });
 
         resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    // ----- CONTACT CARD -----
-    function createContactCard(contact, companyName) {
-        var confidenceClass = "confidence-" + (contact.confidence || "medium");
-        var confidenceLabel = contact.confidence || "medium";
+    function createContactRow(contact) {
+        const type = categoryLabels[contact.category] || "Contact";
 
-        // Generate a robust LinkedIn Search link instead of a direct URL to avoid 404s
-        var searchQuery = encodeURIComponent(contact.name + " " + (companyName || ""));
-        var searchUrl = "https://www.linkedin.com/search/results/people/?keywords=" + searchQuery;
-
-        var linkedinHtml = '<a href="' + searchUrl + '" target="_blank" rel="noopener noreferrer" class="contact-linkedin">🔍 Find on LinkedIn</a>';
-
-        return '<div class="contact-card">'
-            + '<div class="contact-name">' + escapeHtml(contact.name)
-            + '<span class="confidence-tag ' + confidenceClass + '">' + confidenceLabel + '</span></div>'
-            + '<div class="contact-title">' + escapeHtml(contact.title) + '</div>'
-            + '<div class="contact-reason">' + escapeHtml(contact.reason) + '</div>'
-            + linkedinHtml
-            + '</div>';
+        return "<tr>"
+            + '<td><span class="locked-value locked-name">Locked</span></td>'
+            + '<td><span class="locked-value locked-role">Locked</span></td>'
+            + '<td><span class="type-pill">' + escapeHtml(type) + "</span></td>"
+            + '<td><span class="locked-lines" aria-label="Rationale locked">'
+            + '<span class="locked-line"></span>'
+            + '<span class="locked-line locked-line-medium"></span>'
+            + '<span class="locked-line locked-line-short"></span>'
+            + "</span></td>"
+            + '<td><span class="locked-link">Locked</span></td>'
+            + "</tr>";
     }
 
-    // ----- LOAD HISTORY -----
-    async function loadHistory() {
-        try {
-            var result = await db.from("searches")
-                .select("id, company_name, job_title, created_at")
-                .order("created_at", { ascending: false })
-                .limit(10);
+    function collapseSearchInput(data, description) {
+        const label = [data.company, data.jobTitle].filter(Boolean).join(" - ") || "Search complete";
+        const preview = description.length > 170 ? description.slice(0, 170) + "..." : description;
 
-            var data = result.data;
-            if (!data || data.length === 0) {
-                historyList.innerHTML = '<p class="history-empty">No searches yet. Paste a job description above to get started!</p>';
-                return;
-            }
-
-            historyList.innerHTML = data.map(function (item) {
-                var company = item.company_name || "Unknown Company";
-                var role = item.job_title || "Unknown Role";
-                var date = new Date(item.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                return '<div class="history-item" data-id="' + item.id + '">'
-                    + '<div><div class="history-company">' + escapeHtml(company) + '</div>'
-                    + '<div class="history-role">' + escapeHtml(role) + '</div></div>'
-                    + '<div class="history-date">' + date + '</div>'
-                    + '</div>';
-            }).join("");
-
-            // Attach click events to history items
-            document.querySelectorAll(".history-item").forEach(function (el) {
-                el.addEventListener("click", function () {
-                    loadSearch(el.getAttribute("data-id"));
-                });
-            });
-
-        } catch (err) {
-            console.error("Failed to load history:", err);
-        }
+        inputSection.classList.add("is-collapsed");
+        collapsedSearch.innerHTML = '<div class="collapsed-title">' + escapeHtml(label) + "</div>"
+            + '<div class="collapsed-preview">' + escapeHtml(preview) + "</div>";
+        collapsedSearch.style.display = "block";
+        editSearchBtn.style.display = "inline-flex";
     }
 
-    // ----- LOAD PAST SEARCH -----
-    async function loadSearch(id) {
-        try {
-            var result = await db.from("searches").select("*").eq("id", id).single();
-            var data = result.data;
-            if (!data) return;
-            jobInput.value = data.job_description || "";
-            charCount.textContent = jobInput.value.length + " characters";
-            if (data.results) displayResults(data.results);
-        } catch (err) {
-            console.error("Failed to load search:", err);
-        }
+    function showInProgressSearch(description) {
+        const preview = description.length > 170 ? description.slice(0, 170) + "..." : description;
+
+        inputSection.classList.add("is-collapsed");
+        collapsedSearch.innerHTML = '<div class="collapsed-title">Research in progress</div>'
+            + '<div class="collapsed-preview">' + escapeHtml(preview) + "</div>";
+        collapsedSearch.style.display = "block";
+        editSearchBtn.style.display = "inline-flex";
     }
 
-    // ----- UI HELPERS -----
+    function expandSearchInput() {
+        inputSection.classList.remove("is-collapsed");
+        collapsedSearch.style.display = "none";
+        editSearchBtn.style.display = "none";
+    }
+
     function setLoading(isLoading) {
-        var btnText = analyzeBtn.querySelector(".btn-text");
-        var btnLoading = analyzeBtn.querySelector(".btn-loading");
+        const btnText = analyzeBtn.querySelector(".btn-text");
+        const btnLoading = analyzeBtn.querySelector(".btn-loading");
+
         if (isLoading) {
             btnText.style.display = "none";
             btnLoading.style.display = "inline-flex";
             analyzeBtn.disabled = true;
+            editSearchBtn.disabled = true;
             jobInput.disabled = true;
+            startLoadingMessages();
         } else {
             btnText.style.display = "inline-flex";
             btnLoading.style.display = "none";
             analyzeBtn.disabled = false;
+            editSearchBtn.disabled = false;
             jobInput.disabled = false;
+            stopLoadingMessages();
         }
+    }
+
+    function startLoadingMessages() {
+        loadingIndex = 0;
+        loadingStartedAt = window.performance.now();
+        searchStatus.style.display = "block";
+        statusSteps.innerHTML = loadingMessages.map(function (message, index) {
+            return '<span class="status-step" data-index="' + index + '">' + escapeHtml(message) + "</span>";
+        }).join("");
+        updateLoadingMessage(0);
+        loadingFrame = window.requestAnimationFrame(animateLoadingMessages);
+    }
+
+    function stopLoadingMessages() {
+        if (loadingFrame) {
+            window.cancelAnimationFrame(loadingFrame);
+            loadingFrame = null;
+        }
+        updateLoadingMessage(1);
+        searchStatus.style.display = "none";
+    }
+
+    function animateLoadingMessages(timestamp) {
+        const elapsed = timestamp - loadingStartedAt;
+        const progress = Math.min(elapsed / expectedSearchMs, 0.94);
+        updateLoadingMessage(progress);
+        loadingFrame = window.requestAnimationFrame(animateLoadingMessages);
+    }
+
+    function updateLoadingMessage(progress) {
+        const stageProgress = progress * loadingMessages.length;
+        loadingIndex = Math.min(Math.floor(stageProgress), loadingMessages.length - 1);
+
+        searchStatusText.textContent = loadingMessages[loadingIndex];
+        statusProgressFill.style.width = Math.round(progress * 100) + "%";
+        document.querySelectorAll(".status-step").forEach(function (step) {
+            const index = Number(step.getAttribute("data-index"));
+            step.classList.toggle("is-active", index === loadingIndex);
+            step.classList.toggle("is-done", index < loadingIndex);
+        });
     }
 
     function showError(message) {
@@ -210,9 +228,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function escapeHtml(text) {
         if (!text) return "";
-        var div = document.createElement("div");
+        const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
     }
-
-}); // end DOMContentLoaded
+});
