@@ -713,6 +713,16 @@ a:hover {
         padding: 18px;
     }
 
+    .unlock-panel {
+        width: auto;
+        margin: 12px;
+    }
+
+    .results-table-wrap {
+        width: 100%;
+        max-width: 100%;
+    }
+
     .search-card-header,
     .results-topline,
     .input-footer {

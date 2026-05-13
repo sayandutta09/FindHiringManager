@@ -115,9 +115,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const type = categoryLabels[contact.category] || "Contact";
 
         return "<tr>"
+            + '<td><span class="type-pill">' + escapeHtml(type) + "</span></td>"
             + '<td><span class="locked-value locked-name">Locked</span></td>'
             + '<td><span class="locked-value locked-role">Locked</span></td>'
-            + '<td><span class="type-pill">' + escapeHtml(type) + "</span></td>"
             + '<td><span class="locked-lines" aria-label="Rationale locked">'
             + '<span class="locked-line"></span>'
             + '<span class="locked-line locked-line-medium"></span>'
