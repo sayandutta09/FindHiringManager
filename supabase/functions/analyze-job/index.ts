@@ -2,9 +2,32 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-unlock-token",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
+
+type AnalyzeJobRequest = {
+  jobDescription?: string;
+  unlockToken?: string;
+};
+
+function getCreditGateError(req: Request, body: AnalyzeJobRequest): string | null {
+  if (Deno.env.get("REQUIRE_CREDITS") !== "true") {
+    return null;
+  }
+
+  const paidSearchToken = Deno.env.get("PAID_SEARCH_TOKEN");
+  if (!paidSearchToken) {
+    return "Paid search is not configured yet. Please purchase credits once checkout is available.";
+  }
+
+  const suppliedToken = req.headers.get("x-unlock-token") || body.unlockToken || "";
+  if (suppliedToken !== paidSearchToken) {
+    return "Credits are required before generating unlocked contacts.";
+  }
+
+  return null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -18,12 +41,21 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { jobDescription } = await req.json();
+    const body = await req.json() as AnalyzeJobRequest;
+    const { jobDescription } = body;
 
     if (!jobDescription || jobDescription.trim().length < 20) {
       return new Response(
         JSON.stringify({ error: "Please provide a longer job description." }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const creditGateError = getCreditGateError(req, body);
+    if (creditGateError) {
+      return new Response(
+        JSON.stringify({ error: creditGateError, code: "CREDIT_REQUIRED" }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -66,11 +98,14 @@ Job Description:
 ${jobDescription.substring(0, 25000)}
 ---`;
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
     
     const geminiResponse = await fetch(geminiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemInstruction }] },
         contents: [{ parts: [{ text: prompt }] }],

@@ -2,20 +2,7 @@
 // FindHiringManager - Frontend Logic
 // ============================================================
 
-// ----- CONFIGURATION -----
-const SUPABASE_URL = "https://orgskwzpfjyuhiadrxhl.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9yZ3Nrd3pwZmp5dWhpYWRyeGhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1ODAxMTIsImV4cCI6MjA5MzE1NjExMn0.xJc17kMFrQk5IK2l6z2i5COe1Ab_8bD3ZHRku3PAPMA";
-
 document.addEventListener("DOMContentLoaded", function () {
-    if (!window.supabase || typeof window.supabase.createClient !== "function") {
-        console.error("Supabase CDN failed to load.");
-        alert("App failed to load. Please refresh the page.");
-        return;
-    }
-
-    const { createClient } = window.supabase;
-    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     const jobInput = document.getElementById("job-description");
     const inputSection = document.getElementById("input-section");
     const collapsedSearch = document.getElementById("collapsed-search");
@@ -25,6 +12,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const errorSection = document.getElementById("error-section");
     const errorMessage = document.getElementById("error-message");
     const resultsSection = document.getElementById("results-section");
+    const faqSection = document.getElementById("faq-section");
     const contactsTableBody = document.getElementById("contacts-table-body");
     const dismissErrorBtn = document.getElementById("dismiss-error-btn");
     const searchStatus = document.getElementById("search-status");
@@ -48,7 +36,7 @@ document.addEventListener("DOMContentLoaded", function () {
         recruiter: "Recruiter"
     };
 
-    const expectedSearchMs = 24000;
+    const expectedSearchMs = 7000;
     let loadingFrame = null;
     let loadingIndex = 0;
     let loadingStartedAt = 0;
@@ -79,19 +67,15 @@ document.addEventListener("DOMContentLoaded", function () {
         setLoading(true);
         hideError();
         resultsSection.style.display = "none";
+        faqSection.style.display = "none";
         showInProgressSearch(description);
 
         try {
-            const { data, error } = await db.functions.invoke("analyze-job", {
-                body: { jobDescription: description },
-            });
+            await wait(expectedSearchMs);
 
-            if (error) throw new Error(error.message || "Failed to call Edge Function.");
-            if (data && data.error) throw new Error(data.error);
-            if (!data) throw new Error("No data returned from the server.");
-
-            displayResults(data);
-            collapseSearchInput(data, description);
+            const previewData = createLockedPreview();
+            displayResults(previewData);
+            collapseSearchInput(previewData, description);
         } catch (err) {
             console.error("Analysis error:", err);
             expandSearchInput();
@@ -105,11 +89,26 @@ document.addEventListener("DOMContentLoaded", function () {
         const contacts = Array.isArray(data.contacts) ? data.contacts : [];
 
         resultsSection.style.display = "block";
+        faqSection.style.display = "block";
         contactsTableBody.innerHTML = contacts.map(function (contact) {
             return createContactRow(contact);
         }).join("");
 
         resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function createLockedPreview() {
+        return {
+            previewOnly: true,
+            contacts: [
+                { category: "hiring_manager" },
+                { category: "hiring_manager" },
+                { category: "stakeholder" },
+                { category: "stakeholder" },
+                { category: "recruiter" },
+                { category: "recruiter" }
+            ]
+        };
     }
 
     function createContactRow(contact) {
@@ -129,7 +128,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function collapseSearchInput(data, description) {
-        const label = [data.company, data.jobTitle].filter(Boolean).join(" - ") || "Search complete";
+        const label = data.previewOnly
+            ? "Preview prepared"
+            : [data.company, data.jobTitle].filter(Boolean).join(" - ") || "Search complete";
         const preview = description.length > 170 ? description.slice(0, 170) + "..." : description;
 
         inputSection.classList.add("is-collapsed");
@@ -224,6 +225,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function hideError() {
         errorSection.style.display = "none";
+    }
+
+    function wait(ms) {
+        return new Promise(function (resolve) {
+            window.setTimeout(resolve, ms);
+        });
     }
 
     function escapeHtml(text) {
