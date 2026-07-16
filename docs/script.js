@@ -60,11 +60,13 @@ document.addEventListener("DOMContentLoaded", function () {
             .split(/\r?\n/)
             .map(function (line) { return line.trim(); })
             .filter(Boolean);
+        const company = detectCompany(lines, description);
+        const jobTitle = detectJobTitle(lines, description);
 
         return {
-            company: detectCompany(lines, normalized),
-            jobTitle: detectJobTitle(lines, normalized),
-            department: detectDepartment(normalized),
+            company: company,
+            jobTitle: jobTitle,
+            department: detectDepartment(normalized, jobTitle),
             seniority: detectSeniority(normalized),
             contacts: [
                 { category: "hiring_manager" },
@@ -138,9 +140,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function detectCompany(lines, text) {
         const patterns = [
-            /company\s*[:\-]\s*([A-Z][A-Za-z0-9&.,' -]{2,60})/i,
-            /join\s+([A-Z][A-Za-z0-9&.,' -]{2,60})\s+(?:as|to|and|,|\.)/,
-            /([A-Z][A-Za-z0-9&.,' -]{2,60})\s+(?:is|are)\s+(?:hiring|seeking|looking for)/
+            /company\s*[:\-]\s*([^\r\n]{2,60})/i,
+            /join\s+([A-Z][A-Za-z0-9&.,' -]{2,60}?)\s+(?:as|to|and|,|\.)/,
+            /([A-Z][A-Za-z0-9&.,' -]{2,60}?)\s+(?:is|are)\s+(?:hiring|seeking|looking for)/
         ];
 
         for (const pattern of patterns) {
@@ -160,7 +162,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function detectJobTitle(lines, text) {
-        const labeled = text.match(/(?:job title|role|position)\s*[:\-]\s*([A-Za-z0-9,&'()\/+ -]{4,80})/i);
+        const labeled = text.match(/(?:job title|role|position)\s*[:\-]\s*([^\r\n]{4,80})/i);
         if (labeled && labeled[1]) return cleanDetectedValue(labeled[1]);
 
         const candidate = lines.find(function (line) {
@@ -170,7 +172,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return candidate ? cleanDetectedValue(candidate) : "Not clearly detected";
     }
 
-    function detectDepartment(text) {
+    function detectDepartment(text, jobTitle) {
         const departments = [
             { label: "Engineering", terms: ["software", "engineer", "developer", "frontend", "backend", "devops", "infrastructure"] },
             { label: "Product", terms: ["product manager", "product management", "roadmap", "user research"] },
@@ -184,14 +186,23 @@ document.addEventListener("DOMContentLoaded", function () {
             { label: "Finance", terms: ["finance", "accounting", "fp&a", "controller", "financial"] }
         ];
 
+        const titleLower = String(jobTitle || "").toLowerCase();
+        const titleMatch = departments.find(function (department) {
+            return department.terms.some(function (term) {
+                return titleLower.includes(term);
+            });
+        });
+
+        if (titleMatch) return titleMatch.label;
+
         const lower = text.toLowerCase();
-        const match = departments.find(function (department) {
+        const descriptionMatch = departments.find(function (department) {
             return department.terms.some(function (term) {
                 return lower.includes(term);
             });
         });
 
-        return match ? match.label : "Not clearly detected";
+        return descriptionMatch ? descriptionMatch.label : "Not clearly detected";
     }
 
     function detectSeniority(text) {
@@ -220,6 +231,8 @@ document.addEventListener("DOMContentLoaded", function () {
         return value
             .replace(/\s+/g, " ")
             .replace(/[|].*$/g, "")
+            .replace(/\s+(?:company|job title|role|position|location|about us|responsibilities|requirements|qualifications)\s*[:\-].*$/i, "")
+            .replace(/\s+(?:we are|you will|you'll|this role|the role)\b.*$/i, "")
             .replace(/\s+(is|are|as|to|and|we|our)\s*$/i, "")
             .replace(/[.,;: -]+$/g, "")
             .trim();
