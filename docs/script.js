@@ -1,5 +1,6 @@
 // ============================================================
 // FindHiringManager - Frontend Logic
+// The free preview runs locally. No backend or Gemini call occurs.
 // ============================================================
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -14,38 +15,20 @@ document.addEventListener("DOMContentLoaded", function () {
     const resultsSection = document.getElementById("results-section");
     const faqSection = document.getElementById("faq-section");
     const contactsTableBody = document.getElementById("contacts-table-body");
+    const previewSummary = document.getElementById("preview-summary");
     const dismissErrorBtn = document.getElementById("dismiss-error-btn");
-    const searchStatus = document.getElementById("search-status");
-    const searchStatusText = document.getElementById("search-status-text");
-    const statusSteps = document.getElementById("status-steps");
-    const statusProgressFill = document.getElementById("status-progress-fill");
-
-    const loadingMessages = [
-        "Reading job description",
-        "Identifying role",
-        "Mapping decision makers",
-        "Finding contacts",
-        "Reviewing stakeholders",
-        "Researching org chart",
-        "Preparing results"
-    ];
 
     const categoryLabels = {
-        hiring_manager: "Hiring manager",
-        stakeholder: "Stakeholder",
-        recruiter: "Recruiter"
+        hiring_manager: "Hiring manager candidate",
+        stakeholder: "Stakeholder candidate",
+        recruiter: "Recruiter / talent contact"
     };
-
-    const expectedSearchMs = 7000;
-    let loadingFrame = null;
-    let loadingIndex = 0;
-    let loadingStartedAt = 0;
 
     jobInput.addEventListener("input", function () {
         charCount.textContent = jobInput.value.length + " characters";
     });
 
-    analyzeBtn.addEventListener("click", analyzeJob);
+    analyzeBtn.addEventListener("click", previewJob);
 
     dismissErrorBtn.addEventListener("click", function () {
         errorSection.style.display = "none";
@@ -56,50 +39,35 @@ document.addEventListener("DOMContentLoaded", function () {
         jobInput.focus();
     });
 
-    async function analyzeJob() {
+    function previewJob() {
         const description = jobInput.value.trim();
 
-        if (description.length < 20) {
-            showError("Please paste a longer job description.");
+        if (description.length < 40) {
+            showError("Please paste more of the job description so the preview has enough context.");
             return;
         }
 
-        setLoading(true);
         hideError();
-        resultsSection.style.display = "none";
-        faqSection.style.display = "none";
-        showInProgressSearch(description);
 
-        try {
-            await wait(expectedSearchMs);
-
-            const previewData = createLockedPreview();
-            displayResults(previewData);
-            collapseSearchInput(previewData, description);
-        } catch (err) {
-            console.error("Analysis error:", err);
-            expandSearchInput();
-            showError(err.message || "Something went wrong. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+        const preview = createLocalPreview(description);
+        displayPreview(preview);
+        collapseSearchInput(preview, description);
     }
 
-    function displayResults(data) {
-        const contacts = Array.isArray(data.contacts) ? data.contacts : [];
+    function createLocalPreview(description) {
+        const normalized = normalizeText(description);
+        const lines = description
+            .split(/\r?\n/)
+            .map(function (line) { return line.trim(); })
+            .filter(Boolean);
+        const company = detectCompany(lines, description);
+        const jobTitle = detectJobTitle(lines, description);
 
-        resultsSection.style.display = "block";
-        faqSection.style.display = "block";
-        contactsTableBody.innerHTML = contacts.map(function (contact) {
-            return createContactRow(contact);
-        }).join("");
-
-        resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    function createLockedPreview() {
         return {
-            previewOnly: true,
+            company: company,
+            jobTitle: jobTitle,
+            department: detectDepartment(normalized, jobTitle),
+            seniority: detectSeniority(normalized),
             contacts: [
                 { category: "hiring_manager" },
                 { category: "hiring_manager" },
@@ -111,14 +79,34 @@ document.addEventListener("DOMContentLoaded", function () {
         };
     }
 
+    function displayPreview(preview) {
+        contactsTableBody.innerHTML = preview.contacts.map(function (contact) {
+            return createContactRow(contact);
+        }).join("");
+
+        const facts = [
+            usableValue(preview.company) ? "Company: " + preview.company : "",
+            usableValue(preview.jobTitle) ? "Role: " + preview.jobTitle : "",
+            "Function: " + preview.department,
+            "Seniority: " + preview.seniority
+        ].filter(Boolean);
+
+        previewSummary.textContent = facts.join(" | ")
+            + ". No web search or Gemini request has run yet.";
+
+        resultsSection.style.display = "block";
+        faqSection.style.display = "block";
+        resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
     function createContactRow(contact) {
-        const type = categoryLabels[contact.category] || "Contact";
+        const type = categoryLabels[contact.category] || "Contact candidate";
 
         return "<tr>"
             + '<td><span class="type-pill">' + escapeHtml(type) + "</span></td>"
             + '<td><span class="locked-value locked-name">Locked</span></td>'
             + '<td><span class="locked-value locked-role">Locked</span></td>'
-            + '<td><span class="locked-lines" aria-label="Rationale locked">'
+            + '<td><span class="locked-lines" aria-label="Relevance locked">'
             + '<span class="locked-line"></span>'
             + '<span class="locked-line locked-line-medium"></span>'
             + '<span class="locked-line locked-line-short"></span>'
@@ -127,25 +115,16 @@ document.addEventListener("DOMContentLoaded", function () {
             + "</tr>";
     }
 
-    function collapseSearchInput(data, description) {
-        const label = data.previewOnly
-            ? "Preview prepared"
-            : [data.company, data.jobTitle].filter(Boolean).join(" - ") || "Search complete";
-        const preview = description.length > 170 ? description.slice(0, 170) + "..." : description;
+    function collapseSearchInput(preview, description) {
+        const labelParts = [preview.company, preview.jobTitle].filter(usableValue);
+        const label = labelParts.length ? labelParts.join(" - ") : "Local preview prepared";
+        const shortDescription = description.length > 170
+            ? description.slice(0, 170) + "..."
+            : description;
 
         inputSection.classList.add("is-collapsed");
         collapsedSearch.innerHTML = '<div class="collapsed-title">' + escapeHtml(label) + "</div>"
-            + '<div class="collapsed-preview">' + escapeHtml(preview) + "</div>";
-        collapsedSearch.style.display = "block";
-        editSearchBtn.style.display = "inline-flex";
-    }
-
-    function showInProgressSearch(description) {
-        const preview = description.length > 170 ? description.slice(0, 170) + "..." : description;
-
-        inputSection.classList.add("is-collapsed");
-        collapsedSearch.innerHTML = '<div class="collapsed-title">Research in progress</div>'
-            + '<div class="collapsed-preview">' + escapeHtml(preview) + "</div>";
+            + '<div class="collapsed-preview">' + escapeHtml(shortDescription) + "</div>";
         collapsedSearch.style.display = "block";
         editSearchBtn.style.display = "inline-flex";
     }
@@ -154,67 +133,109 @@ document.addEventListener("DOMContentLoaded", function () {
         inputSection.classList.remove("is-collapsed");
         collapsedSearch.style.display = "none";
         editSearchBtn.style.display = "none";
+        resultsSection.style.display = "none";
+        faqSection.style.display = "none";
+        hideError();
     }
 
-    function setLoading(isLoading) {
-        const btnText = analyzeBtn.querySelector(".btn-text");
-        const btnLoading = analyzeBtn.querySelector(".btn-loading");
+    function detectCompany(lines, text) {
+        const patterns = [
+            /company\s*[:\-]\s*([^\r\n]{2,60})/i,
+            /join\s+([A-Z][A-Za-z0-9&.,' -]{2,60}?)\s+(?:as|to|and|,|\.)/,
+            /([A-Z][A-Za-z0-9&.,' -]{2,60}?)\s+(?:is|are)\s+(?:hiring|seeking|looking for)/
+        ];
 
-        if (isLoading) {
-            btnText.style.display = "none";
-            btnLoading.style.display = "inline-flex";
-            analyzeBtn.disabled = true;
-            editSearchBtn.disabled = true;
-            jobInput.disabled = true;
-            startLoadingMessages();
-        } else {
-            btnText.style.display = "inline-flex";
-            btnLoading.style.display = "none";
-            analyzeBtn.disabled = false;
-            editSearchBtn.disabled = false;
-            jobInput.disabled = false;
-            stopLoadingMessages();
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match && match[1]) return cleanDetectedValue(match[1]);
         }
-    }
 
-    function startLoadingMessages() {
-        loadingIndex = 0;
-        loadingStartedAt = window.performance.now();
-        searchStatus.style.display = "block";
-        statusSteps.innerHTML = loadingMessages.map(function (message, index) {
-            return '<span class="status-step" data-index="' + index + '">' + escapeHtml(message) + "</span>";
-        }).join("");
-        updateLoadingMessage(0);
-        loadingFrame = window.requestAnimationFrame(animateLoadingMessages);
-    }
-
-    function stopLoadingMessages() {
-        if (loadingFrame) {
-            window.cancelAnimationFrame(loadingFrame);
-            loadingFrame = null;
-        }
-        updateLoadingMessage(1);
-        searchStatus.style.display = "none";
-    }
-
-    function animateLoadingMessages(timestamp) {
-        const elapsed = timestamp - loadingStartedAt;
-        const progress = Math.min(elapsed / expectedSearchMs, 0.94);
-        updateLoadingMessage(progress);
-        loadingFrame = window.requestAnimationFrame(animateLoadingMessages);
-    }
-
-    function updateLoadingMessage(progress) {
-        const stageProgress = progress * loadingMessages.length;
-        loadingIndex = Math.min(Math.floor(stageProgress), loadingMessages.length - 1);
-
-        searchStatusText.textContent = loadingMessages[loadingIndex];
-        statusProgressFill.style.width = Math.round(progress * 100) + "%";
-        document.querySelectorAll(".status-step").forEach(function (step) {
-            const index = Number(step.getAttribute("data-index"));
-            step.classList.toggle("is-active", index === loadingIndex);
-            step.classList.toggle("is-done", index < loadingIndex);
+        const candidate = lines.find(function (line) {
+            return line.length >= 2
+                && line.length <= 55
+                && /^[A-Z0-9][A-Za-z0-9&.,' -]+$/.test(line)
+                && !looksLikeJobTitle(line)
+                && !/apply|job|role|remote|hybrid|full.?time|posted|applicant|salary/i.test(line);
         });
+
+        return candidate ? cleanDetectedValue(candidate) : "Not clearly detected";
+    }
+
+    function detectJobTitle(lines, text) {
+        const labeled = text.match(/(?:job title|role|position)\s*[:\-]\s*([^\r\n]{4,80})/i);
+        if (labeled && labeled[1]) return cleanDetectedValue(labeled[1]);
+
+        const candidate = lines.find(function (line) {
+            return line.length >= 4 && line.length <= 90 && looksLikeJobTitle(line);
+        });
+
+        return candidate ? cleanDetectedValue(candidate) : "Not clearly detected";
+    }
+
+    function detectDepartment(text, jobTitle) {
+        const departments = [
+            { label: "Engineering", terms: ["software", "engineer", "developer", "frontend", "backend", "devops", "infrastructure"] },
+            { label: "Product", terms: ["product manager", "product management", "roadmap", "user research"] },
+            { label: "Sales", terms: ["sales", "account executive", "business development", "revenue", "quota", "pipeline"] },
+            { label: "Marketing", terms: ["marketing", "growth", "campaign", "brand", "demand generation", "content"] },
+            { label: "Customer Success", terms: ["customer success", "account manager", "renewal", "implementation", "support"] },
+            { label: "Data / Analytics", terms: ["data", "analytics", "business intelligence", "machine learning", "scientist"] },
+            { label: "Design", terms: ["design", "ux", "ui", "researcher", "visual"] },
+            { label: "People / Recruiting", terms: ["recruiter", "talent", "people partner", "human resources"] },
+            { label: "Operations", terms: ["operations", "program manager", "process", "logistics", "strategy"] },
+            { label: "Finance", terms: ["finance", "accounting", "fp&a", "controller", "financial"] }
+        ];
+
+        const titleLower = String(jobTitle || "").toLowerCase();
+        const titleMatch = departments.find(function (department) {
+            return department.terms.some(function (term) {
+                return titleLower.includes(term);
+            });
+        });
+
+        if (titleMatch) return titleMatch.label;
+
+        const lower = text.toLowerCase();
+        const descriptionMatch = departments.find(function (department) {
+            return department.terms.some(function (term) {
+                return lower.includes(term);
+            });
+        });
+
+        return descriptionMatch ? descriptionMatch.label : "Not clearly detected";
+    }
+
+    function detectSeniority(text) {
+        const lower = text.toLowerCase();
+        if (/\b(chief|cxo|vp|vice president|head of|director)\b/.test(lower)) return "Leadership / director";
+        if (/\b(staff|principal|senior|sr\.?|lead)\b/.test(lower)) return "Senior / lead";
+        if (/\b(manager|management)\b/.test(lower)) return "Manager";
+        if (/\b(junior|entry|associate|intern)\b/.test(lower)) return "Early career";
+        return "Not clearly detected";
+    }
+
+    function usableValue(value) {
+        return value && value !== "Not clearly detected";
+    }
+
+    function normalizeText(value) {
+        return value.replace(/\s+/g, " ").trim();
+    }
+
+    function looksLikeJobTitle(value) {
+        return /\b(manager|engineer|designer|analyst|recruiter|specialist|consultant|director|lead|partner|executive|developer|scientist|marketer|operator|architect|product|sales|marketing|success|operations|finance|data)\b/i.test(value)
+            && !/responsibilities|requirements|qualifications|benefits|about|apply|salary|location/i.test(value);
+    }
+
+    function cleanDetectedValue(value) {
+        return value
+            .replace(/\s+/g, " ")
+            .replace(/[|].*$/g, "")
+            .replace(/\s+(?:company|job title|role|position|location|about us|responsibilities|requirements|qualifications)\s*[:\-].*$/i, "")
+            .replace(/\s+(?:we are|you will|you'll|this role|the role)\b.*$/i, "")
+            .replace(/\s+(is|are|as|to|and|we|our)\s*$/i, "")
+            .replace(/[.,;: -]+$/g, "")
+            .trim();
     }
 
     function showError(message) {
@@ -225,12 +246,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function hideError() {
         errorSection.style.display = "none";
-    }
-
-    function wait(ms) {
-        return new Promise(function (resolve) {
-            window.setTimeout(resolve, ms);
-        });
     }
 
     function escapeHtml(text) {
