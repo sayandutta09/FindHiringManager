@@ -17,6 +17,21 @@ document.addEventListener("DOMContentLoaded", function () {
     const contactsTableBody = document.getElementById("contacts-table-body");
     const previewSummary = document.getElementById("preview-summary");
     const dismissErrorBtn = document.getElementById("dismiss-error-btn");
+    const authOpenBtn = document.getElementById("auth-open-btn");
+    const accountSummary = document.getElementById("account-summary");
+    const accountEmail = document.getElementById("account-email");
+    const signOutBtn = document.getElementById("sign-out-btn");
+    const unlockSignInBtn = document.getElementById("unlock-sign-in-btn");
+    const authContextMessage = document.getElementById("auth-context-message");
+    const authDialog = document.getElementById("auth-dialog");
+    const authDialogClose = document.getElementById("auth-dialog-close");
+    const authForm = document.getElementById("auth-form");
+    const authEmail = document.getElementById("auth-email");
+    const sendMagicLinkBtn = document.getElementById("send-magic-link-btn");
+    const authStatus = document.getElementById("auth-status");
+    const authSetup = getAuthSetup();
+    const authClient = createAuthClient(authSetup);
+    let magicLinkCooldownTimer = null;
 
     const categoryLabels = {
         hiring_manager: "Hiring manager candidate",
@@ -29,6 +44,15 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     analyzeBtn.addEventListener("click", previewJob);
+    authOpenBtn.addEventListener("click", openAuthDialog);
+    unlockSignInBtn.addEventListener("click", openAuthDialog);
+    authDialogClose.addEventListener("click", closeAuthDialog);
+    authForm.addEventListener("submit", sendMagicLink);
+    signOutBtn.addEventListener("click", signOut);
+
+    authDialog.addEventListener("click", function (event) {
+        if (event.target === authDialog) closeAuthDialog();
+    });
 
     dismissErrorBtn.addEventListener("click", function () {
         errorSection.style.display = "none";
@@ -38,6 +62,251 @@ document.addEventListener("DOMContentLoaded", function () {
         expandSearchInput();
         jobInput.focus();
     });
+
+    initializeAuth();
+
+    function getAuthSetup() {
+        const config = window.FIND_HIRING_MANAGER_CONFIG || {};
+        const supabaseUrl = String(config.supabaseUrl || "").trim();
+        const publishableKey = String(config.supabasePublishableKey || "").trim();
+
+        if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)) {
+            return { error: "Sign-in is not configured with a valid Supabase project URL." };
+        }
+
+        if (!/^sb_publishable_[A-Za-z0-9._-]+$/.test(publishableKey)) {
+            return { error: "Sign-in needs a Supabase publishable key before it can be used." };
+        }
+
+        if (!window.supabase || typeof window.supabase.createClient !== "function") {
+            return { error: "The sign-in service could not load. Please refresh and try again." };
+        }
+
+        return { supabaseUrl: supabaseUrl, publishableKey: publishableKey, error: null };
+    }
+
+    function createAuthClient(setup) {
+        if (setup.error) return null;
+
+        return window.supabase.createClient(setup.supabaseUrl, setup.publishableKey, {
+            auth: {
+                autoRefreshToken: true,
+                persistSession: true,
+                detectSessionInUrl: true,
+                flowType: "pkce"
+            }
+        });
+    }
+
+    async function initializeAuth() {
+        const redirectError = getAuthRedirectError();
+
+        if (!authClient) {
+            authOpenBtn.textContent = "Sign-in setup";
+            unlockSignInBtn.textContent = "Sign-in setup";
+            authEmail.disabled = true;
+            sendMagicLinkBtn.disabled = true;
+            authContextMessage.textContent = "Account sign-in is being connected. The free preview remains available.";
+            setAuthStatus(authSetup.error, "error");
+            return;
+        }
+
+        authClient.auth.onAuthStateChange(function (event, session) {
+            renderAuthState(session);
+
+            if (event === "SIGNED_IN") {
+                cleanAuthRedirectUrl();
+                closeAuthDialog();
+            }
+        });
+
+        try {
+            const result = await authClient.auth.getSession();
+            if (result.error) throw result.error;
+
+            renderAuthState(result.data.session);
+
+            if (redirectError) {
+                openAuthDialog();
+                setAuthStatus(redirectError, "error");
+            }
+
+            cleanAuthRedirectUrl();
+        } catch (error) {
+            renderAuthState(null);
+            openAuthDialog();
+            setAuthStatus(readableAuthError(error), "error");
+            cleanAuthRedirectUrl();
+        }
+    }
+
+    function renderAuthState(session) {
+        const email = session && session.user && session.user.email
+            ? session.user.email
+            : "";
+
+        if (email) {
+            authOpenBtn.hidden = true;
+            accountSummary.hidden = false;
+            accountEmail.textContent = email;
+            accountEmail.title = email;
+            unlockSignInBtn.hidden = true;
+            authContextMessage.textContent = "Signed in as " + email + ". Credits and protected search are coming in the next MVP steps.";
+            return;
+        }
+
+        authOpenBtn.hidden = false;
+        accountSummary.hidden = true;
+        accountEmail.textContent = "";
+        accountEmail.removeAttribute("title");
+        unlockSignInBtn.hidden = false;
+        authContextMessage.textContent = "Sign in with your email so future credits and searches can belong to your account.";
+    }
+
+    function openAuthDialog() {
+        if (!authDialog.open) authDialog.showModal();
+
+        if (authSetup.error) {
+            setAuthStatus(authSetup.error, "error");
+            return;
+        }
+
+        window.setTimeout(function () {
+            authEmail.focus();
+        }, 0);
+    }
+
+    function closeAuthDialog() {
+        if (authDialog.open) authDialog.close();
+    }
+
+    async function sendMagicLink(event) {
+        event.preventDefault();
+
+        if (!authClient) {
+            setAuthStatus(authSetup.error, "error");
+            return;
+        }
+
+        const email = authEmail.value.trim().toLowerCase();
+        if (!email || !authEmail.checkValidity()) {
+            authEmail.reportValidity();
+            return;
+        }
+
+        sendMagicLinkBtn.disabled = true;
+        sendMagicLinkBtn.textContent = "Sending...";
+        setAuthStatus("", "");
+
+        try {
+            const result = await authClient.auth.signInWithOtp({
+                email: email,
+                options: {
+                    emailRedirectTo: getAuthRedirectUrl(),
+                    shouldCreateUser: true
+                }
+            });
+
+            if (result.error) throw result.error;
+
+            setAuthStatus("Check your inbox for the secure sign-in link. You can close this window while you wait.", "success");
+            startMagicLinkCooldown(60);
+        } catch (error) {
+            sendMagicLinkBtn.disabled = false;
+            sendMagicLinkBtn.textContent = "Send magic link";
+            setAuthStatus(readableAuthError(error), "error");
+        }
+    }
+
+    function startMagicLinkCooldown(seconds) {
+        window.clearInterval(magicLinkCooldownTimer);
+        let remaining = seconds;
+
+        sendMagicLinkBtn.disabled = true;
+        sendMagicLinkBtn.textContent = "Resend in " + remaining + "s";
+
+        magicLinkCooldownTimer = window.setInterval(function () {
+            remaining -= 1;
+
+            if (remaining <= 0) {
+                window.clearInterval(magicLinkCooldownTimer);
+                magicLinkCooldownTimer = null;
+                sendMagicLinkBtn.disabled = false;
+                sendMagicLinkBtn.textContent = "Send magic link";
+                return;
+            }
+
+            sendMagicLinkBtn.textContent = "Resend in " + remaining + "s";
+        }, 1000);
+    }
+
+    async function signOut() {
+        if (!authClient) return;
+
+        signOutBtn.disabled = true;
+        signOutBtn.textContent = "Signing out...";
+
+        try {
+            const result = await authClient.auth.signOut({ scope: "local" });
+            if (result.error) throw result.error;
+            renderAuthState(null);
+        } catch (error) {
+            openAuthDialog();
+            setAuthStatus(readableAuthError(error), "error");
+        } finally {
+            signOutBtn.disabled = false;
+            signOutBtn.textContent = "Sign out";
+        }
+    }
+
+    function getAuthRedirectUrl() {
+        return window.location.origin + window.location.pathname;
+    }
+
+    function getAuthRedirectError() {
+        const query = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+        return query.get("error_description")
+            || hash.get("error_description")
+            || query.get("error")
+            || hash.get("error")
+            || "";
+    }
+
+    function cleanAuthRedirectUrl() {
+        const url = new URL(window.location.href);
+        const authQueryKeys = ["code", "error", "error_code", "error_description"];
+        let changed = false;
+
+        authQueryKeys.forEach(function (key) {
+            if (url.searchParams.has(key)) {
+                url.searchParams.delete(key);
+                changed = true;
+            }
+        });
+
+        if (/access_token|refresh_token|error_description|error_code/.test(url.hash)) {
+            url.hash = "";
+            changed = true;
+        }
+
+        if (changed) {
+            window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+        }
+    }
+
+    function setAuthStatus(message, type) {
+        authStatus.textContent = message || "";
+        authStatus.classList.toggle("is-error", type === "error");
+        authStatus.classList.toggle("is-success", type === "success");
+    }
+
+    function readableAuthError(error) {
+        if (!error) return "Sign-in could not be completed. Please try again.";
+        if (typeof error === "string") return error;
+        return error.message || "Sign-in could not be completed. Please try again.";
+    }
 
     function previewJob() {
         const description = jobInput.value.trim();
@@ -60,11 +329,13 @@ document.addEventListener("DOMContentLoaded", function () {
             .split(/\r?\n/)
             .map(function (line) { return line.trim(); })
             .filter(Boolean);
+        const company = detectCompany(lines, description);
+        const jobTitle = detectJobTitle(lines, description);
 
         return {
-            company: detectCompany(lines, normalized),
-            jobTitle: detectJobTitle(lines, normalized),
-            department: detectDepartment(normalized),
+            company: company,
+            jobTitle: jobTitle,
+            department: detectDepartment(normalized, jobTitle),
             seniority: detectSeniority(normalized),
             contacts: [
                 { category: "hiring_manager" },
@@ -138,9 +409,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function detectCompany(lines, text) {
         const patterns = [
-            /company\s*[:\-]\s*([A-Z][A-Za-z0-9&.,' -]{2,60})/i,
-            /join\s+([A-Z][A-Za-z0-9&.,' -]{2,60})\s+(?:as|to|and|,|\.)/,
-            /([A-Z][A-Za-z0-9&.,' -]{2,60})\s+(?:is|are)\s+(?:hiring|seeking|looking for)/
+            /company\s*[:\-]\s*([^\r\n]{2,60})/i,
+            /join\s+([A-Z][A-Za-z0-9&.,' -]{2,60}?)\s+(?:as|to|and|,|\.)/,
+            /([A-Z][A-Za-z0-9&.,' -]{2,60}?)\s+(?:is|are)\s+(?:hiring|seeking|looking for)/
         ];
 
         for (const pattern of patterns) {
@@ -160,7 +431,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function detectJobTitle(lines, text) {
-        const labeled = text.match(/(?:job title|role|position)\s*[:\-]\s*([A-Za-z0-9,&'()\/+ -]{4,80})/i);
+        const labeled = text.match(/(?:job title|role|position)\s*[:\-]\s*([^\r\n]{4,80})/i);
         if (labeled && labeled[1]) return cleanDetectedValue(labeled[1]);
 
         const candidate = lines.find(function (line) {
@@ -170,7 +441,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return candidate ? cleanDetectedValue(candidate) : "Not clearly detected";
     }
 
-    function detectDepartment(text) {
+    function detectDepartment(text, jobTitle) {
         const departments = [
             { label: "Engineering", terms: ["software", "engineer", "developer", "frontend", "backend", "devops", "infrastructure"] },
             { label: "Product", terms: ["product manager", "product management", "roadmap", "user research"] },
@@ -184,14 +455,23 @@ document.addEventListener("DOMContentLoaded", function () {
             { label: "Finance", terms: ["finance", "accounting", "fp&a", "controller", "financial"] }
         ];
 
+        const titleLower = String(jobTitle || "").toLowerCase();
+        const titleMatch = departments.find(function (department) {
+            return department.terms.some(function (term) {
+                return titleLower.includes(term);
+            });
+        });
+
+        if (titleMatch) return titleMatch.label;
+
         const lower = text.toLowerCase();
-        const match = departments.find(function (department) {
+        const descriptionMatch = departments.find(function (department) {
             return department.terms.some(function (term) {
                 return lower.includes(term);
             });
         });
 
-        return match ? match.label : "Not clearly detected";
+        return descriptionMatch ? descriptionMatch.label : "Not clearly detected";
     }
 
     function detectSeniority(text) {
@@ -220,6 +500,8 @@ document.addEventListener("DOMContentLoaded", function () {
         return value
             .replace(/\s+/g, " ")
             .replace(/[|].*$/g, "")
+            .replace(/\s+(?:company|job title|role|position|location|about us|responsibilities|requirements|qualifications)\s*[:\-].*$/i, "")
+            .replace(/\s+(?:we are|you will|you'll|this role|the role)\b.*$/i, "")
             .replace(/\s+(is|are|as|to|and|we|our)\s*$/i, "")
             .replace(/[.,;: -]+$/g, "")
             .trim();
