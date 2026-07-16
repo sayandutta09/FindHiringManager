@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FindHiringManager - Find Contacts from Job Descriptions</title>
-    <meta name="description" content="Paste a job description and find hiring managers, stakeholders, and recruiters to network with.">
+    <title>FindHiringManager - Research People Before You Apply</title>
+    <meta name="description" content="Paste a job description and preview likely hiring managers, stakeholders, and recruiters to research before outreach.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260512-8">
+    <link rel="stylesheet" href="style.css?v=20260715-1">
 </head>
 <body>
     <div class="app-container">
@@ -22,7 +22,7 @@
                 </div>
                 <div>
                     <h1>Stop applying cold. Find likely people to research before you apply.</h1>
-                    <p class="tagline">Paste a job description and get AI-suggested hiring managers, stakeholders, and recruiters to verify before outreach.</p>
+                    <p class="tagline">Preview the contact types around a role, then unlock a sourced search when paid research is available.</p>
                 </div>
             </div>
         </header>
@@ -32,33 +32,19 @@
                 <div class="card search-card">
                     <div class="search-card-header">
                         <div>
-                            <p class="eyebrow">Find Key Contacts</p>
+                            <p class="eyebrow">Free local preview</p>
                             <h2 class="section-title">Paste the entire job description</h2>
-                            <p class="section-helper">No need to format anything. Just copy and paste.</p>
+                            <p class="section-helper">The preview runs only in your browser. It does not call Gemini, search the web, or use a credit.</p>
                         </div>
-                        <button class="btn-secondary edit-search-btn" id="edit-search-btn" type="button" style="display:none;">Edit search</button>
+                        <button class="btn-secondary edit-search-btn" id="edit-search-btn" type="button" style="display:none;">Edit job post</button>
                     </div>
 
                     <textarea id="job-description" class="job-input" placeholder="Paste the full job description here..." rows="8"></textarea>
                     <div class="collapsed-search" id="collapsed-search" style="display:none;"></div>
 
-                    <div class="search-status" id="search-status" style="display:none;">
-                        <div class="status-line">
-                            <div class="status-pulse" aria-hidden="true"></div>
-                            <span id="search-status-text">Reading job description</span>
-                        </div>
-                        <div class="status-progress" aria-hidden="true">
-                            <div class="status-progress-fill" id="status-progress-fill"></div>
-                        </div>
-                        <div class="status-steps" id="status-steps"></div>
-                    </div>
-
                     <div class="input-footer">
                         <span class="char-count" id="char-count">0 characters</span>
-                        <button id="analyze-btn" class="btn-primary" type="button">
-                            <span class="btn-text">Find contacts</span>
-                            <span class="btn-loading" style="display:none;">Searching</span>
-                        </button>
+                        <button id="analyze-btn" class="btn-primary" type="button">Preview contact types</button>
                     </div>
                 </div>
             </section>
@@ -73,32 +59,37 @@
             <section class="results-section" id="results-section" style="display:none;">
                 <div class="results-topline">
                     <div>
-                        <h2 class="section-title">Results ready</h2>
+                        <p class="eyebrow">Free local preview</p>
+                        <h2 class="section-title">Contact map prepared</h2>
+                        <p class="section-helper" id="preview-summary">No real contact research has run yet.</p>
                     </div>
                 </div>
 
                 <div class="locked-results-shell">
                     <div class="unlock-panel" aria-live="polite">
-                        <p class="unlock-kicker">Locked preview</p>
-                        <h3>Unlock this contact list with 1 credit</h3>
-                        <p>Preview only the contact type. Names, roles, rationale, and LinkedIn search links unlock after purchase.</p>
-                        <div class="credit-options">
-                            <button type="button" class="credit-option">
+                        <p class="unlock-kicker">Paid search</p>
+                        <h3>Unlock real contact research</h3>
+                        <p>The paid search will research likely people, current roles, relevance, and source links. Always verify results before outreach.</p>
+
+                        <div class="credit-options" aria-label="Planned credit packs">
+                            <button type="button" class="credit-option" disabled title="Checkout is coming soon">
                                 <span>Starter</span>
                                 <strong>$9</strong>
-                                <small>15 credits</small>
+                                <small>15 searches</small>
                             </button>
-                            <button type="button" class="credit-option featured">
+                            <button type="button" class="credit-option featured" disabled title="Checkout is coming soon">
                                 <span>Active search</span>
                                 <strong>$19</strong>
-                                <small>35 credits</small>
+                                <small>35 searches</small>
                             </button>
-                            <button type="button" class="credit-option">
+                            <button type="button" class="credit-option" disabled title="Checkout is coming soon">
                                 <span>Serious search</span>
                                 <strong>$29</strong>
-                                <small>90 credits</small>
+                                <small>90 searches</small>
                             </button>
                         </div>
+
+                        <p><strong>Checkout is not connected yet.</strong> No purchase can be made on this page.</p>
                     </div>
 
                     <div class="results-table-wrap is-locked" id="results-table-wrap">
@@ -109,7 +100,7 @@
                                     <th>Contact</th>
                                     <th>Current role</th>
                                     <th>Why they matter</th>
-                                    <th>LinkedIn</th>
+                                    <th>Source</th>
                                 </tr>
                             </thead>
                             <tbody id="contacts-table-body"></tbody>
@@ -118,7 +109,7 @@
                 </div>
 
                 <div class="verification-notice">
-                    AI-generated results are based on public web information and can be wrong, outdated, or mismatched. Always verify names, titles, company fit, and LinkedIn profiles before contacting anyone.
+                    Paid results will be AI-suggested from public web information and may be wrong, outdated, or mismatched. Always verify the person, role, company, and source before contacting anyone.
                 </div>
             </section>
 
@@ -129,33 +120,33 @@
 
                 <div class="faq-list">
                     <details class="faq-item">
-                        <summary>What does 1 credit unlock?</summary>
-                        <p>One credit unlocks one job search result: up to 6 people who may be useful to contact for that specific role.</p>
+                        <summary>What happens in the free preview?</summary>
+                        <p>Your browser reads the pasted text and prepares the likely contact categories around the role. It does not send the job description to Gemini or search the web.</p>
                     </details>
 
                     <details class="faq-item">
-                        <summary>When is a credit used?</summary>
-                        <p>You can view the locked preview for free. A credit is used only when you unlock the full contact details.</p>
+                        <summary>Does the preview find real people?</summary>
+                        <p>No. Names, current roles, source links, and relevance require the paid contact search. Checkout and paid search are still being connected.</p>
                     </details>
 
                     <details class="faq-item">
-                        <summary>Which credit pack should I choose?</summary>
-                        <p>If you are testing a few roles, start with $9 for 15 credits. If you apply often, $19 or $29 gives better value.</p>
+                        <summary>When will a credit be used?</summary>
+                        <p>A credit will be used only after an authenticated user requests a real contact search. Previewing the role will remain free.</p>
                     </details>
 
                     <details class="faq-item">
-                        <summary>Are the results guaranteed to be correct?</summary>
-                        <p>No. The results are generated from public web information, so always verify the person and profile before reaching out.</p>
+                        <summary>Are paid results guaranteed to be correct?</summary>
+                        <p>No. Results will use public web information and can be wrong or outdated. Every person and source should be verified before outreach.</p>
                     </details>
                 </div>
             </section>
         </main>
 
         <footer class="footer">
-            <p>Uses public web information. Not affiliated with LinkedIn.</p>
+            <p>Uses public web information for paid research. Not affiliated with LinkedIn.</p>
         </footer>
     </div>
 
-    <script src="script.js?v=20260512-8"></script>
+    <script src="script.js?v=20260715-1"></script>
 </body>
 </html>
