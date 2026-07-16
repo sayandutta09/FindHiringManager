@@ -8,21 +8,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260715-1">
+    <link rel="stylesheet" href="style.css?v=20260716-1">
 </head>
 <body>
     <div class="app-container">
         <header class="header">
-            <div class="logo">
-                <div class="logo-icon" aria-hidden="true">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <path d="m21 21-4.3-4.3"></path>
-                    </svg>
+            <div class="header-topline">
+                <div class="logo">
+                    <div class="logo-icon" aria-hidden="true">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.3-4.3"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1>Stop applying cold. Find likely people to research before you apply.</h1>
+                        <p class="tagline">Preview the contact types around a role, then unlock a sourced search when paid research is available.</p>
+                    </div>
                 </div>
-                <div>
-                    <h1>Stop applying cold. Find likely people to research before you apply.</h1>
-                    <p class="tagline">Preview the contact types around a role, then unlock a sourced search when paid research is available.</p>
+
+                <div class="account-area">
+                    <button class="btn-secondary auth-open-btn" id="auth-open-btn" type="button" aria-haspopup="dialog">Sign in</button>
+                    <div class="account-summary" id="account-summary" hidden>
+                        <span class="account-email" id="account-email"></span>
+                        <button class="btn-secondary" id="sign-out-btn" type="button">Sign out</button>
+                    </div>
                 </div>
             </div>
         </header>
@@ -89,6 +99,11 @@
                             </button>
                         </div>
 
+                        <div class="auth-context" id="auth-context">
+                            <p id="auth-context-message">Sign in with your email so future credits and searches can belong to your account.</p>
+                            <button class="btn-secondary" id="unlock-sign-in-btn" type="button">Sign in with email</button>
+                        </div>
+
                         <p><strong>Checkout is not connected yet.</strong> No purchase can be made on this page.</p>
                     </div>
 
@@ -147,6 +162,26 @@
         </footer>
     </div>
 
-    <script src="script.js?v=20260715-1"></script>
+    <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-dialog-title">
+        <div class="auth-dialog-shell">
+            <button class="dialog-close" id="auth-dialog-close" type="button" aria-label="Close sign-in dialog">&#215;</button>
+            <p class="eyebrow">Your account</p>
+            <h2 id="auth-dialog-title">Sign in with a magic link</h2>
+            <p class="auth-dialog-copy">Enter your email and we will send a secure sign-in link. No password is required.</p>
+
+            <form class="auth-form" id="auth-form">
+                <label for="auth-email">Email address</label>
+                <input id="auth-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+                <button class="btn-primary" id="send-magic-link-btn" type="submit">Send magic link</button>
+            </form>
+
+            <p class="auth-status" id="auth-status" role="status" aria-live="polite"></p>
+            <p class="auth-privacy">We use your email only to operate your account and send essential product messages.</p>
+        </div>
+    </dialog>
+
+    <script src="config.js?v=20260716-1" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.7/dist/umd/supabase.min.js" integrity="sha384-BmlQlKlDvXvKoxkn5OQuUo/aJQCTXeB+Kls6EccBmG4Kf8AXvp89RtO9MtPxP/r5" crossorigin="anonymous" defer></script>
+    <script src="script.js?v=20260716-1" defer></script>
 </body>
 </html>
